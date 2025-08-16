@@ -5,10 +5,10 @@ const path = require("path");
 // CONFIG
 const URL = "https://davpsasnsol.onrender.com/api/ping";
 const STATE_FILE = path.join(__dirname, "last_state.json");
-const LOG_FILE = path.join(__dirname, "pinger.log");
-const MAX_SKIPS = 5; // never skip more than 5 times in a row
+const LOG_FILE = path.join(__dirname, "ping-log.txt");
+const MAX_SKIPS = 4; // never skip more than 4 in a row
 
-// Load last state (skip counter)
+// Load last state
 let state = { skipCount: 0 };
 try {
   state = JSON.parse(fs.readFileSync(STATE_FILE, "utf-8"));
@@ -24,22 +24,13 @@ const userAgents = [
   "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X)",
   "Mozilla/5.0 (iPad; CPU OS 14_0 like Mac OS X)",
   "Mozilla/5.0 (Android 11; Mobile; rv:89.0)",
-  "Mozilla/5.0 (Windows NT 6.1; Win64; x64)",
   "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:90.0)"
 ];
-
-// Helper: log to file
-function log(message) {
-  const timestamp = new Date().toISOString();
-  const entry = `[${timestamp}] ${message}\n`;
-  fs.appendFileSync(LOG_FILE, entry);
-  console.log(message);
-}
 
 // Decide skip logic
 let skip = false;
 if (state.skipCount < MAX_SKIPS) {
-  skip = Math.random() < 0.5; // 50% chance
+  skip = Math.random() < 0.5; // 50% chance to skip
 } else {
   skip = false; // force ping if max skips reached
 }
@@ -47,29 +38,35 @@ if (state.skipCount < MAX_SKIPS) {
 if (skip) {
   state.skipCount += 1;
   fs.writeFileSync(STATE_FILE, JSON.stringify(state));
-  log(`⏩ Skipping this run (#${state.skipCount} in a row)...`);
+  const logEntry = `[${new Date().toISOString()}] ⏩ Skipped (in a row: ${state.skipCount})\n`;
+  fs.appendFileSync(LOG_FILE, logEntry);
+  console.log(logEntry);
   process.exit(0);
 }
 
-// If pinging, reset skipCount and delete state file
+// If pinging, reset skipCount
 state.skipCount = 0;
-if (fs.existsSync(STATE_FILE)) fs.unlinkSync(STATE_FILE);
+fs.writeFileSync(STATE_FILE, JSON.stringify(state));
 
 // Add random delay before ping (0–60 sec)
 const delay = Math.floor(Math.random() * 61);
-log(`⏳ Waiting ${delay}s before ping...`);
+console.log(`⏳ Waiting ${delay}s before ping...`);
 
 setTimeout(() => {
   const ua = userAgents[Math.floor(Math.random() * userAgents.length)];
-  log(`📡 Pinging ${URL} with UA: ${ua}`);
+  console.log(`📡 Pinging ${URL} with UA: ${ua}`);
 
   https.get(
     URL,
     { headers: { "User-Agent": ua } },
     (res) => {
-      log(`✅ Status: ${res.statusCode}`);
+      const logEntry = `[${new Date().toISOString()}] ✅ Pinged ${URL} | Status: ${res.statusCode}\n`;
+      fs.appendFileSync(LOG_FILE, logEntry);
+      console.log(logEntry);
     }
   ).on("error", (err) => {
-    log(`❌ Error: ${err.message}`);
+    const logEntry = `[${new Date().toISOString()}] ❌ Error: ${err.message}\n`;
+    fs.appendFileSync(LOG_FILE, logEntry);
+    console.error(logEntry);
   });
 }, delay * 1000);
